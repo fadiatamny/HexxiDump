@@ -1,65 +1,38 @@
 use std::env;
-use std::fs;
-use std::fs::File;
-use std::io::Read;
-use std::io::Result;
-use std::io::Write;
+use std::fs::{self, File};
+use std::io::{BufWriter, Read, Result, Write};
 use std::time::SystemTime;
 
-fn process_chunk(out_file: &mut File, chunk: &[u8], offset: usize) -> Result<()> {
-    write!(out_file, "{:08X}\t", offset)?;
+fn process_chunk(output: &mut BufWriter<File>, chunk: &[u8], offset: usize) -> Result<()> {
+    write!(output, "{:08X}\t", offset)?;
     for byte in chunk {
-        out_file.write(format!("{:02X} ", byte).as_bytes())?;
+        write!(output, "{:02X} ", byte)?;
     }
-    writeln!(out_file)?;
+    writeln!(output)?;
 
     Ok(())
 }
 
 fn process_file_in_chunks(file_to_read: &str, file_to_dump: &str) -> Result<()> {
-    println!("Reading From: {file_to_read}");
-
-    let file = fs::File::open(file_to_read);
-
-    if let Err(err) = file {
-        println!("Error opening file: {}", err);
-        return Err(err);
-    }
-
-    let out_file = fs::File::create(file_to_dump);
-
-    if let Err(err) = out_file {
-        println!("Error creating output file: {}", err);
-        return Err(err);
-    }
-
-    let mut opened_file = file.unwrap();
-    let mut out_opened_file = out_file.unwrap();
+    let mut in_file = File::open(file_to_read)?;
+    let out_file = File::create(file_to_dump)?;
 
     let mut buffer = vec![0u8; 16];
     let mut offset = 0;
+    let mut out_buffer = BufWriter::new(out_file);
 
     loop {
-        let bytes_read = match opened_file.read(&mut buffer) {
-            Ok(bytes) => bytes,
-            Err(err) => {
-                println!("Error reading file: {}", err);
-                return Err(err);
-            }
-        };
-
+        let bytes_read = in_file.read(&mut buffer)?;
         if bytes_read == 0 {
             break;
         }
+
         let chunk = &buffer[..bytes_read];
-
-        if let Err(err) = process_chunk(&mut out_opened_file, chunk, offset) {
-            println!("Error processing chunk: {}", err);
-            return Err(err);
-        }
-
+        process_chunk(&mut out_buffer, chunk, offset)?;
         offset += bytes_read;
     }
+
+    out_buffer.flush()?;
 
     Ok(())
 }
