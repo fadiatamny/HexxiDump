@@ -1,43 +1,12 @@
+mod handlers;
+
 use std::env;
-use std::fs::{self, File};
-use std::io::{BufWriter, Read, Result, Write};
+use std::fs;
 use std::path::Path;
 use std::process;
 use std::time::SystemTime;
 
-fn process_chunk<W: Write>(output: &mut W, chunk: &[u8], offset: u64) -> Result<()> {
-    write!(output, "{:08X}\t", offset)?;
-    for byte in chunk {
-        write!(output, "{:02X} ", byte)?;
-    }
-    writeln!(output)?;
-
-    Ok(())
-}
-
-fn process_file_in_chunks(file_to_read: &str, file_to_dump: &str) -> Result<()> {
-    let mut in_file = File::open(file_to_read)?;
-    let out_file = File::create(file_to_dump)?;
-
-    let mut buffer = vec![0u8; 16];
-    let mut offset: u64 = 0;
-    let mut out_buffer = BufWriter::new(out_file);
-
-    loop {
-        let bytes_read = in_file.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
-
-        let chunk = &buffer[..bytes_read];
-        process_chunk(&mut out_buffer, chunk, offset)?;
-        offset += bytes_read as u64;
-    }
-
-    out_buffer.flush()?;
-
-    Ok(())
-}
+use handlers::process_file::process_file;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -69,7 +38,7 @@ fn main() {
         }
     }
 
-    if let Err(e) = process_file_in_chunks(program_to_read, &dump_path) {
+    if let Err(e) = process_file(program_to_read, &dump_path) {
         eprintln!("An error occurred: {}", e);
         process::exit(1);
     }
