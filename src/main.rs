@@ -1,9 +1,11 @@
 use std::env;
 use std::fs::{self, File};
 use std::io::{BufWriter, Read, Result, Write};
+use std::path::Path;
+use std::process;
 use std::time::SystemTime;
 
-fn process_chunk(output: &mut BufWriter<File>, chunk: &[u8], offset: usize) -> Result<()> {
+fn process_chunk<W: Write>(output: &mut W, chunk: &[u8], offset: u64) -> Result<()> {
     write!(output, "{:08X}\t", offset)?;
     for byte in chunk {
         write!(output, "{:02X} ", byte)?;
@@ -18,7 +20,7 @@ fn process_file_in_chunks(file_to_read: &str, file_to_dump: &str) -> Result<()> 
     let out_file = File::create(file_to_dump)?;
 
     let mut buffer = vec![0u8; 16];
-    let mut offset = 0;
+    let mut offset: u64 = 0;
     let mut out_buffer = BufWriter::new(out_file);
 
     loop {
@@ -29,7 +31,7 @@ fn process_file_in_chunks(file_to_read: &str, file_to_dump: &str) -> Result<()> 
 
         let chunk = &buffer[..bytes_read];
         process_chunk(&mut out_buffer, chunk, offset)?;
-        offset += bytes_read;
+        offset += bytes_read as u64;
     }
 
     out_buffer.flush()?;
@@ -38,16 +40,14 @@ fn process_file_in_chunks(file_to_read: &str, file_to_dump: &str) -> Result<()> 
 }
 
 fn main() {
-    fs::create_dir_all("./dumps").expect("Failed to create the dumps directory");
-
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        println!("Usage: {} <file_to_read>", args[0]);
-        return;
+        eprintln!("Usage: {} <file_to_read> [output_dump_path]", args[0]);
+        process::exit(1);
     }
 
-    let programm_to_read = &args[1];
+    let program_to_read = &args[1];
     let dump_path = if args.len() == 3 {
         args[2].clone()
     } else {
@@ -60,7 +60,17 @@ fn main() {
         format!("./dumps/dump_{}.txt", timestamp)
     };
 
-    if let Err(e) = process_file_in_chunks(programm_to_read, &dump_path) {
-        println!("An error occurred: {}", e);
+    if let Some(parent) = Path::new(&dump_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                eprintln!("Failed to create directory {}: {}", parent.display(), e);
+                process::exit(1);
+            }
+        }
+    }
+
+    if let Err(e) = process_file_in_chunks(program_to_read, &dump_path) {
+        eprintln!("An error occurred: {}", e);
+        process::exit(1);
     }
 }
