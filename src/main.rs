@@ -76,7 +76,7 @@ fn main() {
 
     let programm_to_read = &args[1];
     let dump_path = if args.len() == 3 {
-        args[3].clone()
+        args[2].clone()
     } else {
         let now = SystemTime::now();
         let timestamp = now
